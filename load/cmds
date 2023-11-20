@@ -1,0 +1,5 @@
+stress cmd: 
+.\ab.exe -n 10000000 -c 5000 http://testflaskappenvironment.eba-bifb3ba7.eu-north-1.elasticbeanstalk.com/stress
+
+aws cli cmd:
+aws cloudformation create-stack --stack-name TestFlaskAppStack --template-body file://template.yaml --capabilities CAPABILITY_IAM  --parameters ParameterKey=VpcCID,ParameterValue=""vpc-0734ad58f10e7f090"
