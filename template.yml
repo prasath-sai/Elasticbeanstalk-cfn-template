@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  VpcCID:
+    Description: Please enter ID of the VPC
+    Type: String
+  PlublicSubnets:
+    Description: Please enter IDs of the public subnets to be used for ELB followed be comma in quotes
+    Type: String
+  PrivateSubnets:
+    Description: Please enter IDs of the private subnets to be used for ELB followed be comma in quotes
+    Type: String
+  AppName:
+    Description: Please enter the App Name
+    Type: String
+  S3BucketName:
+    Description: Please enter the S3 bucket name
+    Type: String
+  S3BucketKey:
+    Description: Please enter the S3 object key
+    Type: String
+
+Resources:
+  TestElasticBeanstalkApplication:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Ref AppName
+
+  TestElasticBeanstalkEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !Ref TestElasticBeanstalkApplication
+      EnvironmentName: TestFlaskAppEnvironment
+      SolutionStackName: '64bit Amazon Linux 2023 v4.0.5 running Python 3.11'
+      VersionLabel: !Ref ApplicationVersion
+      OptionSettings:
+        # VPC Configuration
+        - Namespace: aws:ec2:vpc
+          OptionName: VPCId
+          Value: !Ref VpcCID
+        - Namespace: aws:ec2:vpc
+          OptionName: Subnets
+          Value: !Ref PrivateSubnets
+        - Namespace: aws:ec2:vpc
+          OptionName: ELBSubnets
+          Value: !Ref PlublicSubnets
+
+        # Elastic Load Balancer Configuration
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: EnvironmentType
+          Value: LoadBalanced
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: LoadBalancerType
+          Value: application
+        - Namespace: aws:elbv2:listener:default
+          OptionName: ListenerEnabled
+          Value: true
+        - Namespace: aws:elbv2:listener:default
+          OptionName: Protocol
+          Value: HTTP
+        
+        # Auto-Scaling Configuration
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: IamInstanceProfile
+          Value: !Ref AppInstanceProfile
+        - Namespace: aws:autoscaling:asg
+          OptionName: MinSize
+          Value: '2'
+        - Namespace: aws:autoscaling:asg
+          OptionName: MaxSize
+          Value: '4'
+        - Namespace: aws:autoscaling:trigger
+          OptionName: MeasureName
+          Value: CPUUtilization
+        - Namespace: aws:autoscaling:trigger
+          OptionName: Unit
+          Value: Percent
+        - Namespace: aws:autoscaling:trigger
+          OptionName: BreachDuration
+          Value: 5
+        - Namespace: aws:autoscaling:trigger
+          OptionName: UpperThreshold
+          Value: 80
+        - Namespace: aws:autoscaling:trigger
+          OptionName: LowerThreshold
+          Value: 30
+  
+  ApplicationVersion:
+    Type: AWS::ElasticBeanstalk::ApplicationVersion
+    Properties:
+      ApplicationName: !Ref TestElasticBeanstalkApplication
+      SourceBundle:
+        S3Bucket: !Ref S3BucketName
+        S3Key: !Ref S3BucketKey
+  
+  # IAM resources
+  AppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+  AppPolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: TestAppPolicy
+      Roles:
+      - !Ref AppRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action: "*"
+            Resource: "*"
+
+  AppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+      - !Ref AppRole
